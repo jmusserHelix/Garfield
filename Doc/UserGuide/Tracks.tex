@@ -1,0 +1,428 @@
+The purpose of \texttt{Track...} classes is to simulate  
+ionization patterns produced by charged particles traversing the detector. 
+
+The type of the primary particle is set by the function
+\begin{lstlisting}
+void SetParticle(std::string particle);
+\end{lstlisting}
+\begin{description}
+  \item[particle]
+  name of the particle 
+\end{description}
+Only particles which are sufficiently long lived to leave a 
+track in a detector are considered.
+A list of the available particles is given 
+in Table~\ref{Tab:ParticleNames}.
+
+The kinematics of the charged particle can be defined 
+by means of a number of equivalent methods:
+  \begin{itemize}
+    \item
+    the total energy (in eV) of the particle,
+    \item
+    the kinetic energy (in eV) of the particle,
+    \item
+    the momentum (in eV/\(c\)) of the particle,
+    \item
+    the (dimension-less) velocity \(\beta = v / c\), 
+    the Lorentz factor \(\gamma = 1 / \sqrt{1 - \beta^2}\) 
+    or the product \(\beta\gamma\) of these two variables.
+  \end{itemize}
+The corresponding functions are
+\begin{lstlisting}
+void SetEnergy(const double e);
+void SetKineticEnergy(const double ekin);
+void SetMomentum(const double p);
+void SetBeta(const double beta);
+void SetGamma(const double gamma);
+void SetBetaGamma(const double bg);
+\end{lstlisting}
+
+\begin{table}
+  \centering
+  \caption{Available charged particles.}
+  \label{Tab:ParticleNames}
+  \begin{tabular}{l l . r}
+    \toprule
+    particle & & \multicolumn{1}{c}{mass [MeV/\(c^{2}\)]} & charge \\
+    \midrule
+    \(e\)     & \texttt{electron, e-} & 0.510998910 & \(-1\) \\
+    \(e^{+}\) & \texttt{positron, e+} & 0.510998910 & \(+1\) \\
+    \(\mu^{-}\) & \texttt{muon, mu-}  & 105.658367  & \(-1\) \\
+    \(\mu^{+}\) & \texttt{mu+}        & 105.658367  & \(+1\) \\
+    \(\pi^{-}\) & \texttt{pion, pi, pi-} & 139.57018 & \(-1\) \\
+    \(\pi^{+}\) & \texttt{pi+}           & 139.57018 & \(+1\) \\
+    \(K^{-}\)   & \texttt{kaon, K, K-}   & 493.677   & \(-1\) \\
+    \(K^{+}\)   & \texttt{K+}            & 493.677   & \(+1\) \\
+    \(p\)       & \texttt{proton, p}     & 938.272013 & \(+1\) \\
+    \(\overline{p}\) & \texttt{anti-proton, antiproton, p-bar} & 938.272013 & \(-1\) \\
+    \(d\)       & \texttt{deuteron, d} & 1875.612793 & \(+1\) \\
+  \bottomrule
+  \end{tabular}
+\end{table}
+
+A track is initialized by means of
+\begin{lstlisting}
+void NewTrack(const double x0, const double y0, const double z0, const double t0,
+              const double dx0, const double dy0, const double dz0);
+\end{lstlisting}
+\begin{description}
+  \item[x0, y0, z0] initial position (in cm)
+  \item[t0] starting time
+  \item[dx0, dy0, dz0] initial direction vector
+\end{description}
+The starting point of the track has to be inside an ionizable medium. 
+Depending on the type of \texttt{Track} class, there can be 
+further restrictions on the type of \texttt{Medium}.
+If the specified direction vector has zero length, an isotropic random vector 
+will be generated.
+ 
+After successful initialization, the ``clusters'' produced along the track
+can be retrieved using
+\begin{lstlisting}
+const std::vector<Cluster>& GetClusters();
+\end{lstlisting}
+In this context, ``cluster'' refers to the energy loss in a single ionizing 
+collision of the primary charged particle and the secondary 
+electrons produced in this process. 
+The concrete implementation of the cluster objects depends on the  
+\texttt{Track} class.
+  
+\section{Heed}\label{Sec:Heed}
+
+The program Heed \cite{Smirnov2005} is an implementation 
+of the photo-absorption ionization (PAI) model. 
+It was written by I. Smirnov.
+An interface to Heed is available through the class \texttt{TrackHeed}. 
+
+The \texttt{Cluster} objects returned by \texttt{TrackHeed::GetClusters} 
+contain the position and time of the ionizing collision 
+(member variables \texttt{x, y, z, t}), the transferred energy 
+(member variable \texttt{energy}), and a \texttt{vector} of 
+\texttt{Electron} objects corresponding to the conduction electrons 
+associated to the cluster. 
+
+In the following snippet, we iterate over the clusters along a track 
+and the conduction electrons in each cluster.
+\begin{lstlisting}
+TrackHeed track;
+// ...
+double x0 = 0., y0 = 0., z0 = 0., t0 = 0.;
+track.NewTrack(x0, y0, z0, t0, 0., 0., 0.);
+// Loop over the clusters along the track.
+for (const auto& cluster : track.GetClusters()) {
+  // Loop over the conduction electrons in the cluster.
+  for (const auto& electron : cluster.electrons) {
+    // Get the coordinates of the electron.
+    const double xe = electron.x; 
+    const double ye = electron.y; 
+    const double ze = electron.z; 
+    const double te = electron.t; 
+  }
+}
+\end{lstlisting}
+
+\subsection{Delta electron transport}
+
+Heed simulates the energy degradation of \(\delta\) electrons and 
+the production of secondary (``conduction'') electrons 
+using a phenomenological algorithm described in Ref.~\cite{Smirnov2005}.
+
+\texttt{TrackHeed} retrieves the necessary input parameters - the 
+asymptotic \(W\) value (eV) and the Fano factor - 
+from the relevant \texttt{Medium} object. 
+%\begin{lstlisting}
+%void Medium::SetW(const double w);
+%void Medium::SetFanoFactor(const double f);
+%\end{lstlisting}
+If these parameters are set to zero, Heed uses internal default values. 
+The default value for the Fano factor is \(F = 0.19\).
+
+The transport of \(\delta\) electrons can be activated or deactivated 
+using
+\begin{lstlisting}
+void EnableDeltaElectronTransport();
+void DisableDeltaElectronTransport();
+\end{lstlisting} 
+
+If \(\delta\) electron transport is disabled, 
+the number of electrons returned by \texttt{GetCluster} is 
+the number of ``primary'' ionisation electrons, 
+\textit{i.\,e.}~the photo-electrons and Auger electrons. 
+Their kinetic energies and locations are accessible 
+through the function \texttt{GetElectron}.
+
+If \(\delta\) electron transport is enabled (default setting), 
+the function \texttt{GetElectron} returns the 
+locations of the ``conduction'' electrons as calculated by the 
+internal \(\delta\) transport algorithm of Heed. 
+Since this method does not provide the energy and direction of the 
+secondary electrons, the corresponding parameters in 
+\texttt{GetElectron} are not meaningful in this case. 
+
+\subsection{Photon transport}
+
+Heed can also be used for simulating x-ray photoabsorption. 
+\begin{lstlisting}
+void TransportPhoton(const double x0, const double y0, const double z0,
+                     const double t0, const double e0,
+                     const double dx0, const double dy0, const double dz0,
+                     int& nel);
+\end{lstlisting}
+\begin{description}
+\item[x0, y0, z0, t0] initial position and time of the photon
+\item[e0] photon energy in eV
+\item[dx0, dy0, dz0] direction of the photon
+\item[nel] number of photoelectrons and Auger-electrons produced 
+           in the photon conversion
+\end{description}
+
+\subsection{Magnetic fields}
+If the sensor has a non-zero magnetic field, \texttt{TrackHeed} will, 
+by default, take the magnetic field into account for 
+calculating the charged-particle trajectory.  
+In order to explicitly enable or disable the use of the magnetic field  
+in the stepping algorithm, the functions 
+\begin{lstlisting}
+EnableMagneticField();
+DisableMagneticField();
+\end{lstlisting}
+can be called before simulating a track.
+Depending on the strength of the magnetic field, it might be necessary to adapt the 
+limits/parameters used in the stepping algorithm in order to obtain a smoothly curved 
+trajectory as, for instance, in the example below.
+\begin{lstlisting}
+TrackHeed track;
+// Get the default parameters.
+double maxrange = 0., rforstraight = 0., stepstraight = 0., stepcurved = 0.;
+track.GetSteppingLimits(maxrange, rforstraight, stepstraight, stepcurved);
+// Reduce the step size [rad]. 
+stepcurved = 0.02;
+track.SetSteppingLimits(maxrange, rforstraight, stepstraight, stepcurved);
+\end{lstlisting} 
+
+\section{SRIM}
+SRIM\footnote{Stopping and Range of Ions in Matter, \href{www.srim.org}{www.srim.org}} is a program for simulating the energy loss of ions in matter. 
+It produces tables of stopping powers, range and straggling parameters that 
+can subsequently be imported in Garfield using the class \texttt{TrackSrim}. 
+The function
+\begin{lstlisting}
+bool ReadFile(const std::string& file)
+\end{lstlisting}
+returns \texttt{true} if the SRIM output file was read successfully.
+The SRIM file contains the following data
+\begin{itemize}
+\item
+a list of kinetic energies at which losses and straggling have been computed;
+\item
+average energy lost per unit distance via electromagnetic processes, for each energy;
+\item
+average energy lost per unit distance via nuclear processes, for each energy;
+\item
+projected path length, for each energy;
+\item
+longitudinal straggling, for each energy;
+\item
+transverse straggling, for each energy.
+\end{itemize}
+These can be visualized using the functions
+\begin{lstlisting}
+void PlotEnergyLoss();
+void PlotRange();
+void PlotStraggling();
+\end{lstlisting}
+and printed out using the function \texttt{TrackSrim::Print()}.
+In addition to these tables, the file also contains the mass and charge of 
+the projectile, and the density of the target medium.
+These properties are also imported and stored by \texttt{TrackSrim} 
+when reading in the file. Unlike in case of Heed, the particle type 
+therefore does not need to be specified by the user. 
+The user does however need to set the kinetic energy of the projectile.
+
+\texttt{TrackSrim} tries to generate individual tracks which statistically 
+reproduce the average quantities calculated by SRIM.
+Starting with the energy specified by the user, it iteratively
+\begin{itemize}
+\item
+computes (by interpolating in the tables)  
+the electromagnetic and nuclear energy loss per unit length at the 
+current particle energy,
+\item
+calculates a step with a length over which the particle will 
+produce on average a certain number of electrons,
+\item
+updates the trajectory based on the longitudinal and transverse scatter 
+at the current particle energy,
+\item 
+calculates a randomised actual electromagnetic energy loss over the step 
+and updates the particle energy.
+\end{itemize}
+This is repeated until the particle has no energy left or leaves the geometry.
+The model for randomising the energy loss over a step can be set using 
+the function 
+\begin{lstlisting}
+void SetModel(const int m);
+\end{lstlisting}
+\begin{description}
+\item[m] fluctuation model to be used (Table~\ref{Tab:SrimFluctuationModels}); the default setting is model 4.
+\end{description}
+\begin{table}
+  \centering
+  \caption{Fluctuation models in \texttt{TrackSrim}.}
+  \label{Tab:SrimFluctuationModels}
+  \begin{tabular}{l l}
+    \toprule
+    Model & Description \\
+    \midrule
+    0 & No fluctuations \\
+    1 & Untruncated Landau distribution \\
+    2 & Vavilov distribution (provided the kinematic parameters are within the range of applicability, \\
+      & otherwise fluctuations are disabled) \\
+    3 & Gaussian distribution \\
+    4 & Combination of Landau, Vavilov and Gaussian models, \\
+      & each applied in their alleged domain of applicability \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+The generation of Vavilov distributed random numbers is based on a 
+C++ implementation of the CERNLIB G115 procedures for the 
+fast, approximate calculation of functions related to the 
+Vavilov distribution. The description of the algorithm can be found 
+in Ref.~\cite{RotondiMontagna1990}.
+
+For sampling the energy loss, \texttt{TrackSrim} needs the 
+electron density of the target material. By default it is retrieved 
+from the relevant \texttt{Medium} object (and scaled to the mass density 
+given in the SRIM output file). 
+Alternatively, the user can specify the effective atomic number $Z$ 
+and mass number $A$ of the target 
+using \texttt{TrackSrim::SetAtomicMassNumbers}.
+
+
+Transverse and longitudinal straggling can be switched on or off using
+\begin{lstlisting}
+void EnableTransverseStraggling(const bool on);
+void EnableLongitudinalStraggling(const bool on);
+\end{lstlisting}
+If energy loss fluctuations are used, longitudinal straggling should be disabled.
+By default, transverse straggling is switched on and longitudinal straggling 
+is switched off. 
+
+SRIM is aimed at low energy nuclear particles which deposit large numbers of electrons in a medium. 
+The grouping of electrons to a cluster is therefore somewhat arbitrary. 
+By default, \texttt{TrackSrim} will adjust the step size such that 
+there are on average 100 clusters on the track.
+If the user specifies a target cluster size, using
+\begin{lstlisting}
+void SetTargetClusterSize(const int n);
+\end{lstlisting}
+the step size will be chosen such that a cluster comprises on average 
+\texttt{n} electrons. Alternatively, if the user specifies a maximum 
+number of clusters, using
+\begin{lstlisting}
+void SetClustersMaximum(const int n);
+\end{lstlisting}
+the step size will be chosen such that on average there are 
+\texttt{n / 2} clusters on the track.
+
+To calculate the number of electrons for given amount of deposited energy,
+\texttt{TrackSrim} needs the work function $W$ (in eV) and the 
+Fano factor of the target material. 
+By default, \texttt{TrackSrim} retrieves these parameters from the 
+relevant \texttt{Medium} object.
+Altenatively, they can be set explicitly using 
+\texttt{TrackSrim::SetWorkFunction} and \texttt{TrackSrim::SetFanoFactor}.
+
+\section{TRIM}
+TRIM\footnote{TRansport of Ions in Matter} is a Monte Carlo simulation program 
+from the same collection of software packages as SRIM. 
+It simulates individual ion trajectories in a target 
+(which can be made of several layers) and the processes following the ion's energy loss 
+(recoil cascades, displacement damage, \textit{etc.}). 
+TRIM typically produces a number of output files. 
+One of them is a file called \texttt{EXYZ.txt} which lists the 
+position and electronic stopping power for each simulated ion at 
+regular steps in the ion's kinetic energy.
+The energy interval is set by the user.
+
+The class \texttt{TrackTrim} allows one to import these data in Garfield 
+and use them for simulating tracks. The function for 
+reading ion trajectories from an \texttt{EXYZ.txt} file is 
+\begin{lstlisting}
+bool ReadFile(const std::string& file, const unsigned int nIons = 0,
+              const unsigned int nSkip = 0);
+\end{lstlisting}
+\begin{description}
+  \item[file] name/path of the \texttt{EXYZ.txt} file to be loaded,
+  \item[nIons] number of ion trajectories to be loaded from the file,
+  \item[nSkip] number of ion trajectories to be skipped at the beginning of the file.
+\end{description}
+If the value of \texttt{nIons} is zero, \texttt{TrackTrim} will 
+import all ion trajectories included in the file.
+
+When the function \texttt{NewTrack} is called, 
+\texttt{TrackTrim} will generate clusters according to one of the ion 
+trajectories imported from \texttt{EXYZ.txt} (starting with the first one). 
+Each cluster will correspond to one energy interval. 
+The number of clusters along a track and the deposited energy per cluster 
+is therefore controlled by the energy interval specified when running TRIM.
+The number of electrons in a cluster is sampled using an algorithm 
+that reproduces the requested work function ($W$ value) and Fano factor.
+At the next call to \texttt{NewTrack}, \texttt{TrackTrim} moves to the  
+next ion trajectory in the list (if it reaches the end of the list, 
+it rewinds to the first one). 
+
+\section{Degrade}
+The class \texttt{TrackDegrade} simulates ionisation by primary electrons 
+in a gas and the subsequent degradation of $\delta$ electrons, 
+Auger electrons and photoelectrons, 
+using an interface to the program \textsc{Degrade}, developed by S. Biagi. 
+\textsc{Degrade} has many commonalities with \textsc{Magboltz}, 
+in particular the database of electron-atom/molecule cross-sections. 
+
+While the \textsc{Degrade} program can also be used for simulating X-rays, 
+$\beta$ decay and double $\beta$ decay, but these features are not (yet) 
+accessible through the \texttt{TrackDegrade} interface at the moment. 
+It is also worth noting, that the current version of \texttt{TrackDegrade} 
+does not consider the electric and magnetic fields in the detector.
+
+The \texttt{Cluster} objects returned by \texttt{TrackDegrade::GetClusters} 
+contain the position and time of the ionizing collision 
+(member variables \texttt{x, y, z, t}), a \texttt{vector} of 
+\texttt{Electron} objects corresponding to the thermalised electrons 
+associated to the cluster. In addition, it also contains a \texttt{vector} 
+of the $\delta$ electrons and Auger electrons.
+
+\begin{lstlisting}
+TrackDegrade track;
+// ...
+double x0 = 0., y0 = 0., z0 = 0., t0 = 0.;
+double dx0 = 1., dy0 = 0., dz0 = 0.
+track.NewTrack(x0, y0, z0, t0, dx0, dy0, dz0);
+// Loop over the clusters along the track.
+for (const auto& cluster : track.GetClusters()) {
+  // Loop over the thermalised electrons in the cluster.
+  for (const auto& electron : cluster.electrons) {
+    // Get the coordinates and kinetic energy of the electron.
+    double xe = electron.x;
+    double ye = electron.y;
+    double ze = electron.z;
+    double te = electron.t;
+    double ee = electron.energy;
+  }
+}
+\end{lstlisting}
+
+By default, electrons are tracked until their kinetic energy falls below 
+2\,eV. This threshold can be changed using the function
+\begin{lstlisting}
+void SetThresholdEnergy(const double ethr);
+\end{lstlisting}
+
+If the function 
+\begin{lstlisting}
+void StoreExcitations(const bool on = true, const double ethr);
+\end{lstlisting}
+is called prior to \texttt{NewTrack}, the excitations (with excitation 
+energy above \texttt{ethr}) produced by the primary and secondary electrons 
+are also stored in the \texttt{Cluster} object. 

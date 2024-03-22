@@ -1,0 +1,43 @@
+# Copyright (C) 1994-2017 Synopsys Inc.
+# swbtree vcurrent, Wed Sep 13 18:53:33 2023
+
+# --- simulation flow
+sde sde "" {}
+sde N_Thickness "500" {490}
+sde P_Thickness "500" {500}
+sde N_Doping "4.41e11" {4.41e11}
+sde P_Doping "6.19e11" {6.19e11}
+sde Contact_Dose "5e19" {5e19}
+sde Contact_Depth "0.3" {0.3}
+sde Diode_Size "2000" {2000}
+weighting_vector sdevice "" {}
+weighting_vector End_Time "300e-9" {300e-9}
+weighting_vector Bias_Voltage "250" {250}
+weighting_vector Pulse_Voltage "1" {1}
+garfield_convert gtclsh "" {}
+# --- variables
+# --- scenarios and parameter specs
+scenario default N_Thickness ""
+scenario default P_Thickness ""
+scenario default N_Doping ""
+scenario default P_Doping ""
+scenario default Contact_Dose ""
+scenario default Contact_Depth ""
+scenario default Diode_Size ""
+scenario default End_Time ""
+scenario default Bias_Voltage ""
+scenario default Pulse_Voltage ""
+# --- simulation tree
+0 1 0 {} {default} 0
+1 2 1 {490} {default} 0
+2 3 2 {500} {default} 0
+3 4 3 {4.41e11} {default} 0
+4 5 4 {6.19e11} {default} 0
+5 6 5 {5e19} {default} 0
+6 7 6 {0.3} {default} 0
+7 8 7 {2000} {default} 0
+8 9 8 {} {default} 0
+9 10 9 {300e-9} {default} 0
+10 11 10 {250} {default} 0
+11 12 11 {1} {default} 0
+12 14 12 {} {default} 0
